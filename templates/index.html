@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOLO 网页播放器</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="glass">
+
+<canvas id="bg-canvas"></canvas>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <rect width="28" height="28" rx="8" fill="var(--accent)"/>
+        <polygon points="10,6 21,14 10,22" fill="white"/>
+      </svg>
+      <span class="logo-text">SOLO</span>
+    </div>
+    <span class="logo-sub">网页播放器</span>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="section-title">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/>
+        <rect x="10" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/>
+        <rect x="1" y="10" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/>
+        <rect x="10" y="10" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/>
+      </svg>
+      分类
+    </div>
+    <select id="classify-select" class="sidebar-select">
+      <option value="">选择分类模板...</option>
+    </select>
+    <div id="classify-list" class="classify-list"></div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="section-title">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M2 3h12M2 3l4 7-4 4h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      标签
+    </div>
+    <div id="tag-cloud" class="tag-cloud"></div>
+  </div>
+
+  <div class="sidebar-section">
+    <button id="history-btn" class="sidebar-btn" title="浏览历史">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M8 4v4l2.5 2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      浏览历史
+    </button>
+  </div>
+
+  <div id="history-panel" class="history-panel" style="display:none;">
+    <div class="history-panel-header">
+      <span>浏览历史</span>
+      <button id="history-close" class="icon-btn">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+    <div id="history-list" class="history-list"></div>
+  </div>
+
+  <div class="sidebar-footer">
+    <button id="dark-toggle" class="style-toggle-btn" title="深色模式" style="margin-bottom:8px;">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <circle cx="9" cy="9" r="5" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M9 2v2M9 14v2M2 9h2M14 9h2M4.5 4.5l1.5 1.5M12 12l1.5 1.5M4.5 13.5l1.5-1.5M12 6l1.5-1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+      </svg>
+      <span>深色模式</span>
+    </button>
+    <button id="style-toggle" class="style-toggle-btn" title="切换风格">
+      <svg class="style-icon-glass" width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"/>
+        <circle cx="7" cy="7" r="2" fill="currentColor" opacity="0.4"/>
+      </svg>
+      <svg class="style-icon-acrylic" width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <rect x="2" y="2" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.5"/>
+        <circle cx="6" cy="6" r="1.2" fill="currentColor" opacity="0.3"/>
+        <circle cx="9" cy="9" r="1" fill="currentColor" opacity="0.2"/>
+        <circle cx="11" cy="5" r="0.8" fill="currentColor" opacity="0.25"/>
+        <circle cx="7" cy="12" r="0.9" fill="currentColor" opacity="0.2"/>
+      </svg>
+      <span>切换风格</span>
+    </button>
+  </div>
+</aside>
+
+<main class="main-content" id="main-content">
+  <div class="search-bar">
+    <svg class="search-icon" width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <circle cx="7.5" cy="7.5" r="5.5" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M12 12l4.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <input type="text" id="search-input" class="search-input" placeholder="搜索文件...">
+    <button id="search-clear" class="search-clear" style="display:none;">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="file-info-bar" id="file-info-bar">
+    <span id="file-count">0 个文件</span>
+    <span id="active-filter-badge" class="filter-badge" style="display:none;"></span>
+  </div>
+
+  <div class="type-filter-bar" id="type-filter-bar">
+    <button class="type-filter-btn active" data-type="all">全部</button>
+    <button class="type-filter-btn" data-type="video">视频</button>
+    <button class="type-filter-btn" data-type="audio">音频</button>
+    <button class="type-filter-btn" data-type="markdown">文档</button>
+  </div>
+
+  <div id="file-grid" class="file-grid"></div>
+
+  <div id="empty-state" class="empty-state" style="display:none;">
+    <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+      <rect x="12" y="8" width="56" height="64" rx="6" stroke="currentColor" stroke-width="2" opacity="0.3"/>
+      <path d="M28 32h24M28 40h20M28 48h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.2"/>
+      <circle cx="52" cy="56" r="14" fill="var(--accent-light)" opacity="0.15"/>
+      <path d="M48 56h8M52 52v8" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <p class="empty-title">暂无文件</p>
+    <p class="empty-desc">将媒体文件放入 other 目录即可在此查看</p>
+  </div>
+</main>
+
+<aside class="detail-panel" id="detail-panel">
+  <div class="detail-header">
+    <span class="detail-title" id="detail-title">文件详情</span>
+    <button id="detail-close" class="icon-btn" title="关闭">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <path d="M4 4l10 10M14 4l-10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+
+  <div id="detail-placeholder" class="detail-placeholder">
+    <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+      <rect x="8" y="8" width="48" height="48" rx="10" stroke="currentColor" stroke-width="1.5" opacity="0.2"/>
+      <polygon points="24,18 46,32 24,46" fill="currentColor" opacity="0.1"/>
+    </svg>
+    <p>选择文件以查看详情</p>
+  </div>
+
+  <div id="media-area" class="media-area" style="display:none;">
+    <div class="player-wrapper" id="player-wrapper">
+      <video id="video-player" style="display:none;" preload="metadata"></video>
+      <div class="video-controls" id="video-controls" style="display:none;">
+        <div class="progress-bar" id="video-progress-bar">
+          <div class="progress-buffered" id="video-buffered"></div>
+          <div class="progress-filled" id="video-progress-filled"></div>
+          <div class="progress-thumb" id="video-progress-thumb"></div>
+        </div>
+        <div class="controls-row">
+          <div class="controls-left">
+            <button id="video-play-btn" class="ctrl-btn" title="播放/暂停">
+              <svg class="icon-play" width="18" height="18" viewBox="0 0 18 18"><polygon points="4,2 15,9 4,16" fill="currentColor"/></svg>
+              <svg class="icon-pause" width="18" height="18" viewBox="0 0 18 18"><rect x="3" y="2" width="4" height="14" rx="1" fill="currentColor"/><rect x="11" y="2" width="4" height="14" rx="1" fill="currentColor"/></svg>
+            </button>
+            <span class="time-display" id="video-time">0:00 / 0:00</span>
+          </div>
+          <div class="controls-right">
+            <div class="volume-group">
+              <button id="video-mute-btn" class="ctrl-btn" title="静音">
+                <svg class="icon-volume-on" width="18" height="18" viewBox="0 0 18 18"><path d="M2 6h3l4-4v14l-4-4H2z" fill="currentColor"/><path d="M12 4.5a5.5 5.5 0 010 9" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+                <svg class="icon-volume-off" width="18" height="18" viewBox="0 0 18 18"><path d="M2 6h3l4-4v14l-4-4H2z" fill="currentColor"/><line x1="12" y1="6" x2="16" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="16" y1="6" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              </button>
+              <div class="volume-slider-wrapper">
+                <input type="range" id="video-volume" class="volume-slider" min="0" max="1" step="0.05" value="1" title="音量">
+              </div>
+            </div>
+            <button id="video-fullscreen-btn" class="ctrl-btn" title="全屏">
+              <svg width="16" height="16" viewBox="0 0 16 16"><polyline points="11,5 15,5 15,1" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><polyline points="5,11 1,11 1,15" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="audio-player-container" id="audio-player-container" style="display:none;">
+        <div class="audio-visual" id="audio-visual">
+          <svg width="160" height="100" viewBox="0 0 160 100" fill="none">
+            <circle cx="80" cy="50" r="32" stroke="var(--accent-light)" stroke-width="2" opacity="0.3"/>
+            <circle cx="80" cy="50" r="24" stroke="var(--accent)" stroke-width="1.5" opacity="0.4"/>
+            <circle cx="80" cy="50" r="16" fill="var(--accent)" opacity="0.2"/>
+            <path d="M72 35v30M77 28v44M82 22v56M87 28v44M92 35v30" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+          </svg>
+        </div>
+        <audio id="audio-player" preload="metadata"></audio>
+        <div class="audio-controls" id="audio-controls" style="display:none;">
+          <button id="audio-play-btn" class="ctrl-btn" title="播放/暂停">
+            <svg class="icon-play" width="20" height="20" viewBox="0 0 18 18"><polygon points="4,2 15,9 4,16" fill="currentColor"/></svg>
+            <svg class="icon-pause" width="20" height="20" viewBox="0 0 18 18"><rect x="3" y="2" width="4" height="14" rx="1" fill="currentColor"/><rect x="11" y="2" width="4" height="14" rx="1" fill="currentColor"/></svg>
+          </button>
+          <div class="audio-progress-bar" id="audio-progress-bar">
+            <div class="audio-progress-filled" id="audio-progress-filled"></div>
+            <div class="audio-progress-thumb" id="audio-progress-thumb"></div>
+          </div>
+          <span class="time-display" id="audio-time">0:00 / 0:00</span>
+          <div class="volume-group">
+            <button id="audio-mute-btn" class="ctrl-btn" title="静音">
+              <svg class="icon-volume-on" width="16" height="16" viewBox="0 0 18 18"><path d="M2 6h3l4-4v14l-4-4H2z" fill="currentColor"/><path d="M12 4.5a5.5 5.5 0 010 9" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+              <svg class="icon-volume-off" width="16" height="16" viewBox="0 0 18 18"><path d="M2 6h3l4-4v14l-4-4H2z" fill="currentColor"/><line x1="12" y1="6" x2="16" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="16" y1="6" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+            <input type="range" id="audio-volume" class="volume-slider" min="0" max="1" step="0.05" value="1" title="音量">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="audio-only-area" class="audio-only-area" style="display:none;">
+      <div class="audio-only-visual" id="audio-only-visual">
+        <svg class="waveform-bg" width="200" height="120" viewBox="0 0 200 120" fill="none">
+          <circle cx="100" cy="60" r="50" stroke="var(--accent-light)" stroke-width="1.5" opacity="0.2"/>
+          <circle cx="100" cy="60" r="40" stroke="var(--accent)" stroke-width="1" opacity="0.3"/>
+          <circle cx="100" cy="60" r="30" fill="var(--accent)" opacity="0.08"/>
+        </svg>
+        <div class="waveform-bars">
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+        </div>
+      </div>
+      <button id="audio-only-toggle" class="audio-mode-btn">看视频</button>
+    </div>
+  </div>
+
+  <div id="markdown-area" class="markdown-area" style="display:none;">
+    <button id="markdown-fullscreen-btn" class="markdown-fullscreen-btn" title="全屏阅读" style="display:none;">
+      <svg width="16" height="16" viewBox="0 0 16 16"><polyline points="11,5 15,5 15,1" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><polyline points="5,11 1,11 1,15" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div id="markdown-content" class="markdown-content"></div>
+  </div>
+
+  <div id="file-info" class="file-info-section" style="display:none;">
+    <div class="file-info-item">
+      <span class="file-info-label">文件名</span>
+      <span id="info-filename" class="file-info-value"></span>
+    </div>
+    <div class="file-info-item">
+      <span class="file-info-label">类型</span>
+      <span id="info-type" class="file-info-value"></span>
+    </div>
+    <div class="file-info-item">
+      <span class="file-info-label">大小</span>
+      <span id="info-size" class="file-info-value"></span>
+    </div>
+  </div>
+
+  <div id="tag-section" class="tag-section" style="display:none;">
+    <div class="tag-section-title">标签</div>
+    <div class="tag-input-row">
+      <input type="text" id="tag-input" class="tag-input" placeholder="添加标签...">
+      <button id="tag-add-btn" class="tag-add-btn">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+    <div id="tag-list" class="tag-list"></div>
+  </div>
+
+  <div id="detail-error" class="detail-error" style="display:none;"></div>
+</aside>
+
+<script src="{{ url_for('static', filename='js/bg-animation.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+
+<button id="markdown-fullscreen-close" class="markdown-fullscreen-close" style="display:none;" title="退出全屏">
+  <svg width="18" height="18" viewBox="0 0 18 18"><path d="M4 4l10 10M14 4l-10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+</button>
+</body>
+</html>

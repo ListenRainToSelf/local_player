@@ -1,4 +1,3 @@
 {
-  "keyword_frequency_threshold": 3,
-  "_comment": "关键词出现次数 >= keyword_frequency_threshold 时单独成为一个分类标签。修改此数值可调整分类粒度。"
+  "keyword_frequency_threshold": 3
 }

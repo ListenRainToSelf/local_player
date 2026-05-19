@@ -19,6 +19,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OTHER_DIR = os.path.join(BASE_DIR, 'other')
 CLASS_TEMPLATE_DIR = os.path.join(BASE_DIR, 'class_template')
 TAGS_FILE = os.path.join(BASE_DIR, 'tags_data.json')
+LINK_FILE = os.path.join(OTHER_DIR, 'link.json')
+CONFIG_FILE = os.path.join(CLASS_TEMPLATE_DIR, 'config.json')
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
@@ -87,6 +89,92 @@ def scan_directory(base_dir):
     return files
 
 
+def load_links():
+    if not os.path.isfile(LINK_FILE):
+        return {}
+    try:
+        with open(LINK_FILE, 'r', encoding='utf-8') as f:
+            raw = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return {}
+    if not isinstance(raw, list):
+        return {}
+    links = {}
+    for item in raw:
+        if not isinstance(item, str):
+            continue
+        abs_path = os.path.abspath(item.strip())
+        if os.path.isdir(abs_path):
+            name = os.path.basename(abs_path)
+            if not name:
+                name = os.path.basename(abs_path.rstrip(os.sep + '/'))
+            if not name:
+                name = abs_path.replace(':', '').replace(os.sep, '_')
+            unique_name = name
+            counter = 1
+            while unique_name in links:
+                counter += 1
+                unique_name = f'{name}_{counter}'
+            links[unique_name] = abs_path
+    return links
+
+
+def scan_linked_folders(links):
+    files = []
+    for folder_name, abs_path in links.items():
+        if not os.path.isdir(abs_path):
+            continue
+        for root, dirs, filenames in os.walk(abs_path):
+            for fn in filenames:
+                ext = os.path.splitext(fn)[1].lower()
+                if ext not in SUPPORTED_EXTENSIONS:
+                    continue
+                full_path = os.path.join(root, fn)
+                rel_under = os.path.relpath(full_path, abs_path).replace(os.sep, '/')
+                virt_path = f'_link_/{folder_name}/{rel_under}'
+                rel_dir = os.path.dirname(rel_under)
+                sub_folder = folder_name
+                if rel_dir and rel_dir != '.':
+                    sub_folder = f'{folder_name}/{rel_dir}'
+                file_type = get_file_type(ext)
+                size = os.path.getsize(full_path)
+                files.append({
+                    'filename': fn,
+                    'path': virt_path,
+                    'folder': sub_folder,
+                    'type': file_type,
+                    'size': size,
+                    'ext': ext,
+                })
+    return files
+
+
+def resolve_link_path(virt_path):
+    if not virt_path.startswith('_link_/'):
+        return None
+    parts = virt_path[len('_link_/'):].split('/', 1)
+    if len(parts) != 2:
+        return None
+    folder_name, relative = parts
+    links = load_links()
+    abs_path = links.get(folder_name)
+    if not abs_path:
+        return None
+    resolved = os.path.abspath(os.path.join(abs_path, relative))
+    real_base = os.path.realpath(abs_path)
+    real_path = os.path.realpath(resolved)
+    if not real_path.startswith(real_base + os.sep) and real_path != real_base:
+        return None
+    return real_path
+
+
+def scan_all_files():
+    local_files = scan_directory(OTHER_DIR)
+    links = load_links()
+    linked_files = scan_linked_folders(links)
+    return local_files + linked_files
+
+
 def read_tags():
     if not os.path.exists(TAGS_FILE):
         return {}
@@ -114,13 +202,16 @@ def index():
 
 @app.route('/api/files')
 def api_files():
-    all_files = scan_directory(OTHER_DIR)
+    all_files = scan_all_files()
     return jsonify({'files': all_files, 'total': len(all_files)})
 
 
 @app.route('/api/media/<path:filepath>')
 def api_media(filepath):
-    real_path = safe_resolve(OTHER_DIR, filepath)
+    if filepath.startswith('_link_/'):
+        real_path = resolve_link_path(filepath)
+    else:
+        real_path = safe_resolve(OTHER_DIR, filepath)
     if real_path is None:
         abort(403)
     if not os.path.isfile(real_path):
@@ -166,7 +257,10 @@ def api_media(filepath):
 
 @app.route('/api/markdown/<path:filepath>')
 def api_markdown(filepath):
-    real_path = safe_resolve(OTHER_DIR, filepath)
+    if filepath.startswith('_link_/'):
+        real_path = resolve_link_path(filepath)
+    else:
+        real_path = safe_resolve(OTHER_DIR, filepath)
     if real_path is None:
         abort(403)
     if not os.path.isfile(real_path):
@@ -250,7 +344,7 @@ def api_classify():
                 '_data': data,
             })
 
-    all_files = scan_directory(OTHER_DIR)
+    all_files = scan_all_files()
 
     classified_by_template = {}
 
@@ -290,10 +384,9 @@ def api_classify():
 
     freq_classified = {}
     freq_threshold = 2
-    config_path = os.path.join(CLASS_TEMPLATE_DIR, 'config.json')
-    if os.path.isfile(config_path):
+    if os.path.isfile(CONFIG_FILE):
         try:
-            with open(config_path, 'r', encoding='utf-8') as f:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 config = json.load(f)
             freq_threshold = config.get('keyword_frequency_threshold', 2)
         except (json.JSONDecodeError, IOError):
@@ -321,7 +414,7 @@ def api_search():
         return jsonify({'results': []})
 
     q_lower = q.lower()
-    all_files = scan_directory(OTHER_DIR)
+    all_files = scan_all_files()
     tags = read_tags()
 
     results = []
@@ -356,12 +449,67 @@ def api_search():
 
 @app.route('/api/subfolders')
 def api_subfolders():
-    all_files = scan_directory(OTHER_DIR)
+    all_files = scan_all_files()
     folders = defaultdict(list)
     for f in all_files:
         folder_key = f['folder'] if f['folder'] else '根目录'
         folders[folder_key].append(f['filename'])
     return jsonify(dict(folders))
+
+
+def read_config():
+    if not os.path.isfile(CONFIG_FILE):
+        return {}
+    try:
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return {}
+
+
+def write_config(data):
+    os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def read_links():
+    if not os.path.isfile(LINK_FILE):
+        return []
+    try:
+        with open(LINK_FILE, 'r', encoding='utf-8') as f:
+            raw = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return []
+    return raw if isinstance(raw, list) else []
+
+
+def write_links(data):
+    os.makedirs(os.path.dirname(LINK_FILE), exist_ok=True)
+    with open(LINK_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+@app.route('/api/config', methods=['GET', 'POST'])
+def api_config():
+    if request.method == 'GET':
+        return jsonify(read_config())
+    data = request.get_json(silent=True)
+    if not data:
+        abort(400)
+    write_config(data)
+    return jsonify({'status': 'ok'})
+
+
+@app.route('/api/links', methods=['GET', 'POST'])
+def api_links():
+    if request.method == 'GET':
+        return jsonify(read_links())
+    data = request.get_json(silent=True)
+    if not isinstance(data, list):
+        abort(400)
+    write_links(data)
+    return jsonify({'status': 'ok'})
 
 
 @app.errorhandler(400)

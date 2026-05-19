@@ -69,6 +69,7 @@ var state = {
   currentTemplate: '',
   highlightedIndex: -1,
   typeFilter: 'all',
+  sortBy: 'name-asc',
   darkMode: false,
 };
 
@@ -139,6 +140,13 @@ function initDom() {
   dom.typeFilterBar = $('type-filter-bar');
   dom.markdownFullscreenBtn = $('markdown-fullscreen-btn');
   dom.markdownFullscreenClose = $('markdown-fullscreen-close');
+  dom.settingsBtn = $('settings-btn');
+  dom.settingsOverlay = $('settings-overlay');
+  dom.settingsClose = $('settings-close');
+  dom.settingsSave = $('settings-save');
+  dom.settingThreshold = $('setting-threshold');
+  dom.settingLinks = $('setting-links');
+  dom.settingsError = $('settings-error');
 }
 
 function init() {
@@ -274,9 +282,17 @@ function bindEvents() {
   });
 
   bindTypeFilter();
+  bindSortBar();
 
   dom.markdownFullscreenBtn.addEventListener('click', toggleMarkdownFullscreen);
   dom.markdownFullscreenClose.addEventListener('click', toggleMarkdownFullscreen);
+
+  dom.settingsBtn.addEventListener('click', openSettings);
+  dom.settingsClose.addEventListener('click', closeSettings);
+  dom.settingsOverlay.addEventListener('click', function (e) {
+    if (e.target === dom.settingsOverlay) closeSettings();
+  });
+  dom.settingsSave.addEventListener('click', saveSettings);
 }
 
 function renderAll() {
@@ -300,6 +316,38 @@ function bindTypeFilter() {
       renderFileGrid();
     });
   });
+}
+
+function bindSortBar() {
+  var bar = document.getElementById('sort-bar');
+  if (!bar) return;
+  bar.querySelectorAll('.sort-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      state.sortBy = btn.getAttribute('data-sort');
+      bar.querySelectorAll('.sort-btn').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      renderFileGrid();
+    });
+  });
+}
+
+function sortFiles(files) {
+  var sorted = files.slice();
+  switch (state.sortBy) {
+    case 'name-asc':
+      sorted.sort(function (a, b) { return a.filename.localeCompare(b.filename, 'zh-CN'); });
+      break;
+    case 'name-desc':
+      sorted.sort(function (a, b) { return b.filename.localeCompare(a.filename, 'zh-CN'); });
+      break;
+    case 'size-desc':
+      sorted.sort(function (a, b) { return b.size - a.size; });
+      break;
+    case 'size-asc':
+      sorted.sort(function (a, b) { return a.size - b.size; });
+      break;
+  }
+  return sorted;
 }
 
 function getFilteredFiles() {
@@ -337,6 +385,7 @@ function getFilteredFiles() {
 
 function renderFileGrid() {
   var filteredFiles = getFilteredFiles();
+  filteredFiles = sortFiles(filteredFiles);
 
   dom.fileCount.textContent = filteredFiles.length + ' 个文件';
 
@@ -594,6 +643,8 @@ function performSearch(query) {
         return sb - sa;
       });
 
+      displayFiles = sortFiles(displayFiles);
+
       dom.fileGrid.style.display = '';
       dom.emptyState.style.display = displayFiles.length === 0 ? 'flex' : 'none';
       dom.fileCount.textContent = displayFiles.length + ' 个结果';
@@ -635,6 +686,8 @@ function performSearch(query) {
         }
         return false;
       });
+
+      results = sortFiles(results);
 
       dom.fileGrid.style.display = '';
       dom.emptyState.style.display = results.length === 0 ? 'flex' : 'none';
@@ -1190,6 +1243,55 @@ function bindAudioControls() {
     audio.volume = parseFloat(dom.audioVolume.value);
     audio.muted = audio.volume === 0;
     updateAudioMuteUI();
+  });
+}
+
+function openSettings() {
+  fetch('/api/config').then(function (r) { return r.json(); }).then(function (cfg) {
+    dom.settingThreshold.value = cfg.keyword_frequency_threshold || 2;
+  }).catch(function () {});
+  fetch('/api/links').then(function (r) { return r.json(); }).then(function (links) {
+    dom.settingLinks.value = (links || []).join('\n');
+  }).catch(function () {});
+  dom.settingsOverlay.style.display = 'flex';
+  dom.settingsError.style.display = 'none';
+}
+
+function closeSettings() {
+  dom.settingsOverlay.style.display = 'none';
+}
+
+function saveSettings() {
+  var threshold = parseInt(dom.settingThreshold.value, 10);
+  if (isNaN(threshold) || threshold < 1) {
+    dom.settingsError.style.display = 'block';
+    dom.settingsError.textContent = '阈值必须为 ≥ 1 的整数';
+    return;
+  }
+
+  var linksRaw = dom.settingLinks.value.trim();
+  var links = linksRaw ? linksRaw.split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return l; }) : [];
+
+  var configData = { keyword_frequency_threshold: threshold };
+
+  fetch('/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(configData),
+  }).then(function (resp) {
+    if (!resp.ok) throw new Error('保存配置失败');
+    return fetch('/api/links', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(links),
+    });
+  }).then(function (resp) {
+    if (!resp.ok) throw new Error('保存链接失败');
+    closeSettings();
+    window.location.reload();
+  }).catch(function (err) {
+    dom.settingsError.style.display = 'block';
+    dom.settingsError.textContent = err.message;
   });
 }
 

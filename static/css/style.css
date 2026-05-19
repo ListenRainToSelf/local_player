@@ -1330,8 +1330,28 @@ body.dark .sidebar-footer .style-toggle-btn:first-of-type {
   background: var(--accent-bg);
   border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
 }
-.markdown-content a { color: var(--accent); text-decoration: none; }
-.markdown-content a:hover { text-decoration: underline; }
+.markdown-content a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+  padding: 0 2px;
+  border-bottom: 1px solid var(--accent-bg);
+  transition: all 0.2s ease;
+}
+.markdown-content a:hover {
+  border-bottom-color: var(--accent);
+  background: var(--accent-bg);
+  border-radius: 2px;
+}
+.markdown-content a:visited {
+  color: var(--accent-light);
+}
+.markdown-content a[href^="http"]::after {
+  content: ' ↗';
+  font-size: 0.75em;
+  opacity: 0.5;
+  vertical-align: super;
+}
 .markdown-content img { max-width: 100%; border-radius: var(--radius-sm); }
 .markdown-content code {
   padding: 2px 6px;
@@ -2188,9 +2208,28 @@ body.dark .doc-reading-island.theme-warm { background: #2a2824; color: #d0ccc4; 
 body.dark .doc-reading-island.theme-cool { background: #181a20; color: #c8ccd4; }
 body.dark .doc-reading-island.theme-dark { background: #0f1117; color: #e0e3e8; }
 
+.doc-reading-island .markdown-content a,
+.doc-reading-island a {
+  border-bottom-color: transparent;
+}
+.doc-reading-island .markdown-content a:hover,
+.doc-reading-island a:hover {
+  border-bottom-color: inherit;
+}
+
+.doc-reading-island.theme-warm a { color: #7c3aed; }
+.doc-reading-island.theme-warm a:hover { background: rgba(124,58,237,0.08); }
+.doc-reading-island.theme-cool a { color: var(--accent); }
+.doc-reading-island.theme-cool a:hover { background: var(--accent-bg); }
 .doc-reading-island.theme-dark a { color: #818cf8; }
+.doc-reading-island.theme-dark a:hover { background: rgba(129,140,248,0.12); }
 .doc-reading-island.theme-dark code { background: rgba(255,255,255,0.08); }
 .doc-reading-island.theme-dark blockquote { background: rgba(255,255,255,0.04); }
+
+body.dark .doc-reading-island.theme-warm a { color: #a78bfa; }
+body.dark .doc-reading-island.theme-warm a:hover { background: rgba(167,139,250,0.12); }
+body.dark .doc-reading-island.theme-cool a { color: #818cf8; }
+body.dark .doc-reading-island.theme-cool a:hover { background: rgba(129,140,248,0.12); }
 
 .doc-toc-island {
   position: absolute;

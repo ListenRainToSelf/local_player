@@ -293,6 +293,8 @@ function bindEvents() {
     if (e.target === dom.settingsOverlay) closeSettings();
   });
   dom.settingsSave.addEventListener('click', saveSettings);
+
+  window._immersiveMusicAudio = document.querySelector('#immersive-shell audio');
 }
 
 function renderAll() {
@@ -1164,6 +1166,14 @@ function bindVideoControls() {
 
   video.addEventListener('click', function () {
     if (video.paused) { video.play(); } else { video.pause(); }
+  });
+
+  video.addEventListener('dblclick', function () {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else if (dom.playerWrapper.requestFullscreen) {
+      dom.playerWrapper.requestFullscreen();
+    }
   });
 
   document.addEventListener('fullscreenchange', function () {

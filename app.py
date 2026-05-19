@@ -21,6 +21,8 @@ CLASS_TEMPLATE_DIR = os.path.join(BASE_DIR, 'class_template')
 TAGS_FILE = os.path.join(BASE_DIR, 'tags_data.json')
 LINK_FILE = os.path.join(OTHER_DIR, 'link.json')
 CONFIG_FILE = os.path.join(CLASS_TEMPLATE_DIR, 'config.json')
+PROGRESS_FILE = os.path.join(BASE_DIR, 'progress_data.json')
+EPISODE_CONFIG_FILE = os.path.join(BASE_DIR, 'episode_config.json')
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
@@ -84,6 +86,7 @@ def scan_directory(base_dir):
                 'folder': folder,
                 'type': file_type,
                 'size': size,
+                'episode': extract_episode_number(fn),
                 'ext': ext,
             })
     return files
@@ -144,6 +147,7 @@ def scan_linked_folders(links):
                     'folder': sub_folder,
                     'type': file_type,
                     'size': size,
+                    'episode': extract_episode_number(fn),
                     'ext': ext,
                 })
     return files
@@ -198,6 +202,11 @@ def generate_pygments_css():
 @app.route('/')
 def index():
     return render_template('index.html')
+
+
+@app.route('/immersive')
+def immersive():
+    return render_template('immersive.html')
 
 
 @app.route('/api/files')
@@ -490,6 +499,52 @@ def write_links(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+def extract_episode_number(filename):
+    patterns = [
+        (r'[Ee][Pp]?\s*(\d{1,4})', 1),
+        (r'第\s*(\d{1,4})\s*[集话]', 1),
+        (r'[\[\(（](\d{1,2})[\]\)）]', 1),
+        (r'[Pp]art\s*(\d{1,2})', 1),
+        (r'[-_](\d{1,4})\s*$', 1),
+        (r'^(\d{1,4})[-_.\s]', 1),
+    ]
+    for pattern, group in patterns:
+        m = re.search(pattern, filename)
+        if m:
+            return int(m.group(group))
+    return None
+
+
+def read_episode_config():
+    if not os.path.isfile(EPISODE_CONFIG_FILE):
+        return {}
+    try:
+        with open(EPISODE_CONFIG_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return {}
+
+
+def write_episode_config(data):
+    with open(EPISODE_CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def read_progress():
+    if not os.path.isfile(PROGRESS_FILE):
+        return {}
+    try:
+        with open(PROGRESS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return {}
+
+
+def write_progress(data):
+    with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
 @app.route('/api/config', methods=['GET', 'POST'])
 def api_config():
     if request.method == 'GET':
@@ -530,6 +585,41 @@ def not_found(e):
 @app.errorhandler(416)
 def range_not_satisfiable(e):
     return jsonify({'error': 'Range not satisfiable'}), 416
+
+
+@app.route('/api/episodes')
+def api_episodes():
+    all_files = scan_all_files()
+    videos = [f for f in all_files if f['type'] == 'video']
+    episodes = [f for f in videos if f.get('episode') is not None]
+    episodes.sort(key=lambda f: f['episode'])
+    return jsonify({'episodes': episodes, 'total': len(episodes)})
+
+
+@app.route('/api/progress', methods=['GET', 'POST'])
+def api_progress():
+    if request.method == 'GET':
+        return jsonify(read_progress())
+    data = request.get_json(silent=True)
+    if not data:
+        abort(400)
+    progress = read_progress()
+    path = data.get('path', '')
+    current_time = data.get('currentTime', 0)
+    progress[path] = current_time
+    write_progress(progress)
+    return jsonify({'status': 'ok'})
+
+
+@app.route('/api/episode-config', methods=['GET', 'POST'])
+def api_episode_config():
+    if request.method == 'GET':
+        return jsonify(read_episode_config())
+    data = request.get_json(silent=True)
+    if not data:
+        abort(400)
+    write_episode_config(data)
+    return jsonify({'status': 'ok'})
 
 
 if __name__ == '__main__':
